@@ -47,3 +47,10 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Quarto files and folders
+.quarto/
+
+# Quarto output files
+*.qmd~
+_quarto
