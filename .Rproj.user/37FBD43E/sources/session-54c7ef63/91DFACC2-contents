@@ -1,0 +1,345 @@
+---
+title: "Data Programming"
+subtitle: "Project - Netflix Dataset"
+author: "Mirko Dugajlic"
+date: "`r format(Sys.time(), '%e %B %Y')`"
+format:
+  html:
+    toc: true
+    toc_float: yes
+    embed-resources: true
+execute: 
+  warning: false
+  messages: false
+  echo: true
+  error: true
+bibliography: bibliography.bib
+---
+
+## Introduction {#sec-intro}
+
+### About
+
+Netflix stands as a leading force in the realm of media and video streaming. With a staggering array of over 8,000 movies and TV shows accessible on their platform, as of mid-2021, their global subscriber count exceeds 200 million. This tabulated dataset comprehensively catalogues all offerings on Netflix, including vital details such as cast, directors, ratings, release year, duration, and more.
+
+### Why this topic?
+
+-   Firstly, it provides a rich source of information about user preferences and viewing habits, which are essential for building accurate recommendation models.
+
+-   Secondly, the Netflix movies dataset enables the development and evaluation of advanced *recommendation algorithms* and *machine learning models*. With access to detailed information about movie genres, ratings, release years, crew and cast, and user interactions, etc. scientists can experiment with various algorithms such as [collaborative filtering]{.underline}, [content-based filtering]{.underline}, and [hybrid methods]{.underline} to improve the [accuracy]{style="color: red;"} and [relevance]{style="color: red;"} of recommendations.
+
+Moreover, by continually updating and expanding the dataset, we contribute to the ongoing research and development efforts in the field of recommendation systems. As streaming platforms like Netflix evolve and introduce new content, it becomes imperative to adapt recommendation algorithms to accommodate these changes and ensure that users receive personalized and engaging recommendations.
+
+## Dataset Overview
+
+### About
+
+The Netflix Titles dataset is a comprehensive compilation of movies and TV shows available on Netflix, covering various aspects such as the title type, director, cast, country of production, release year, rating, duration, genres (listed in), and a brief description. This dataset is instrumental for analyzing trends in Netflix content, understanding genre popularity, and examining the distribution of content across different regions and time periods.
+
+### Key Details
+
+**Dataset**: [Netflix Dataset](https://www.kaggle.com/datasets/rahulvyasm/netflix-movies-and-tv-shows)
+
+**Total Entries**: The dataset contains 8,809 entries, each representing a unique movie or TV show.
+
+**Columns**: There are 12 columns in the dataset:
+
+1)  **show_id**: A unique identifier for each title.
+
+2)  **type**: The category of the title, which is either 'Movie' or 'TV Show'.
+
+3)  **title**: The name of the movie or TV show.
+
+4)  **director**: The director(s) of the movie or TV show. (Contains null values for some entries, especially TV shows where this information might not be applicable.)
+
+5)  **cast**: The list of main actors/actresses in the title. (Some entries might not have this information.)
+
+6)  **country**: The country or countries where the movie or TV show was produced.
+
+7)  **date_added**: The date the title was added to Netflix.
+
+8)  **release_year**: The year the movie or TV show was originally released.
+
+9)  **rating**: The age rating of the title.
+
+10) **duration**: The duration of the title, in minutes for movies and seasons for TV shows.
+
+11) **listed_in**: The genres the title falls under.
+
+12) **description**: A brief summary of the title.
+
+## Analysis
+
+### Frequently used functions and libraries
+
+```{r}
+library(readxl)
+library(tibble)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+
+# get counts for any passed column
+
+get.count <- function(data, column) {
+  column <- enquo(column)  # Capture the column name
+  cnt <- data %>%
+    count(!!column)  # Unquote the column name
+  return(cnt)
+}
+
+custom_colors <- c("Movie" = "#db0000", "TV Show" = "#564d4d")
+
+```
+
+### Visual representation of dataset
+
+```{r}
+
+
+df <- read.csv("./files/netflix_titles.csv")
+columns_to_delete <- grep("^X", names(df))
+# Reason for deleting columns is that it makes additional columns after reading files. 
+# Columns are called X, X.1, X.2 and so on.
+df <- df[, -columns_to_delete]
+as_tibble(df)
+
+```
+
+### Error checking
+
+$$
+\begin{equation}
+ RMSE = \sqrt{\sum_{i=1}^{n} \frac{(\hat y_i - y_i)^2} {n}}
+\end{equation}
+$$ Here we can see how to calculate RMSE (Root Mean Square) which is either one of two closely related and frequently used measures of the differences between true or predicted values on the one hand and observed values or an estimator on the other. Variables used in the formula are:
+
+-   $\hat{y}$ - predicted values
+
+-   $y$ - observed values
+
+-   $n$ - number of observations
+
+### Movie & TV Show distribution
+
+```{r}
+#| label: fig-movies-and-tvshows-count
+#| fig-cap: "Movie & TV Shows total count"
+
+ggplot(df, aes(x = type, fill = type)) +
+  geom_bar() +
+  geom_text(stat='count', aes(label=..count..), position=position_stack(vjust=0.5), color="white") +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = custom_colors)
+
+```
+
+On this graph we can see that the movies are leading and that is somehow logical because they are easier to make.
+
+The data from @fig-movies-and-tvshows-count could be also presented as percentages from the whole dataset.
+
+```{r}
+#| label: fig-movies-and-tvshows-percentages
+#| fig-cap: "Movie & TV Shows distribution of total per country in %"
+
+df_summary <- df %>%
+  count(type) %>%
+  mutate(percentage = round(n / sum(n) * 100, 1))
+
+ggplot(df_summary, aes(x = "", y = n, fill = type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            position = position_stack(vjust = 0.5), color = "white") +
+  theme_void()+
+  scale_fill_manual(values = custom_colors)
+```
+
+### Distribution over countries
+
+After these two (@fig-movies-and-tvshows-count and @fig-movies-and-tvshows-percentages) basic overviews lets dive into the distribution of movies and TV shows over countries.
+
+In the next figures @tbl-top_n_countries and @fig-distribution-over-countries-percentage we will show the percentage and the total number of the movies and tv shows made per country.
+
+```{r}
+#| label: tbl-top_n_countries
+#| tbl-cap: "Top 15 countries with movies + TV-shows count"
+
+
+# handling 'NA' values but in this dataset it is empty string
+df <- df %>%
+  mutate(country = ifelse(country == "", "Unknown", country))
+
+# some movies/shows have more countries
+df_split <- df %>%
+  separate_rows(country, sep = ", ")
+
+df_country_data = get.count(df_split,country) %>%
+                  arrange(desc(n))
+total_countries = sum(df_country_data$n)
+
+df_country_data <- df_country_data %>%
+  mutate(perc = round((n / total_countries) * 100, 1))
+
+# Get first 15 rows
+df_country_data_display <- head(df_country_data, n = 15) 
+
+df_country_data_display <- df_country_data_display %>%
+  rownames_to_column(var = "Position")
+
+# Display top 15 countries as a table
+knitr::kable(df_country_data_display[, c("Position","country", "n", "perc")],
+      col.names = c("#","Country","Total (movies+shows)", "% of total"))
+
+```
+
+In the @tbl-top_n_countries we can see that the leading countries, especially USA, both have the most famous and the biggest movie and TV show production cities. For more information about differences between Hollywood and Bollywood [click here](https://testbook.com/key-differences/difference-between-bollywood-and-hollywood).
+
+```{r}
+#| label: fig-distribution-over-countries-percentage
+#| fig-cap: "Movie & TV Shows distribution over countries in %"
+
+df_to_display <- df_split %>%
+  inner_join(df_country_data_display, by = "country") %>%
+  group_by(country) %>%
+  count(type)
+
+
+df_to_display <- df_to_display %>%
+  group_by(country) %>%
+  mutate(total = sum(n))
+  
+df_to_display <- df_to_display %>%
+  group_by(country) %>%
+  mutate(perc = round((n/total *100),1))
+
+
+ggplot(df_to_display, aes(fill=type, x=perc, y=country)) + 
+  geom_bar(position="fill", stat="identity") +
+  geom_text(aes(label = paste0(perc, "%")), position = position_fill(vjust = 0.5), color = "white", size = 3) +
+  labs(title = "Percentage of Movies and TV Shows by Country",
+       x = "Percentage",
+       y = "Countries",
+       fill = "Type") +
+  scale_fill_manual(values = custom_colors) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),  # Remove x-axis labels
+        axis.ticks.x = element_blank())  # Remove x-axis ticks
+
+```
+@fig-distribution-over-countries-percentage, which depicts the percentage of movies and series produced by the top 15 nations, reveals that countries in Eastern Asia create the most TV shows, which is due to the enormous amount of anime episodes.
+
+### Movies and TV Shows average duration over years
+
+```{r}
+# make a plot with years on x axis and number of movies for decades
+
+
+# Change to numeric value
+df$year <- as.numeric(df$release_year) # Extract the year
+
+# Duration extraction
+df$duration_num <- as.numeric(str_extract(df$duration, "\\d+"))
+df_groupedby_type <- df %>%
+  group_by(.$type)
+
+
+# Filter out the Movies and group by year
+df_movies <- df %>%
+  filter(type == "Movie") %>%
+  group_by(year)
+
+df_shows <- df %>%
+  filter(type == "TV Show") %>%
+  group_by(year)
+
+# Calculate the average duration of movies and series per year
+df_avg_movie_duration <- df_movies %>%
+  summarise(avg_duration = mean(duration_num, na.rm = TRUE))
+
+df_avg_series_duration <- df_shows %>%
+  summarise(avg_duration = mean(duration_num, na.rm = TRUE))
+
+```
+
+```{r}
+#| label: fig-movies
+#| fig-cap: "Movies"
+
+# Create the plot fot movies
+ggplot(df_avg_movie_duration, aes(x=year, y=avg_duration)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min(df_avg_movie_duration$year), max(df_avg_movie_duration$year), by = 7)) +
+  labs(x="Year", y="Average Duration (mins)", title="Average Movie Duration Over Time") +
+  theme_minimal()
+```
+
+```{r}
+#| label: fig-shows
+#| fig-cap: "TV Show"
+# Create the plot for series
+ggplot(df_avg_series_duration, aes(x=year, y=avg_duration)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min(df_avg_series_duration$year), max(df_avg_series_duration$year), by = 7)) +
+  labs(x="Year", y="Average Duration (seasons)", title="Average Series Duration Over Time") +
+  theme_minimal()
+
+```
+
+#### Discussion
+
+@fig-movies depicts how the average duration of movies (in minutes) has expanded dramatically in period between 1942 until around1965. From there, the length of each movie varies between 100 and 150 minutes. In the previous 20 years, there has been a tiny but consistent drop in duration.
+
+@fig-shows does not show anything specific, but it does demonstrate how the duration represented in seasons [[is not]{.underline}]{style="color: red;"} a useful way to express the length of TV shows, if it is the only one.
+
+### Top 5
+
+| Title                       | Genres                                  | Length  |
+|--------------------|---------------------------------|-------------------|
+| Black Mirror: Bandersnatch  | Dramas, International, Sci-Fi & Fantasy | 312 min |
+| Headspace: Unwind Your Mind | Documentaries                           | 273 min |
+| The School of Mischief      | Comedies, Dramas, International         | 257 min |
+| No Longer Kids              | Comedies, Dramas, International         | 237 min |
+| Lock Your Girls             | Comedies, International, Romantic       | 233 min |
+
+: Longest movies and their genres {#tbl-top_n_movies}
+
+In @tbl-top_n_movies we can see top 5 longest movies from the dataset listed in descending order. On the other side in @tbl-top_n_tvshows we can see top 5 longest Tv Shows in terms of seasons.
+
+```{r}
+#| label: tbl-top_n_tvshows
+#| tbl-cap: "Longest TV Shows and their genres"
+
+top_n_tvshows <- df %>% 
+  filter(type == "TV Show") %>%
+  arrange(desc(duration_num))
+
+# Get first 5 rows
+top_n_tvshows <- head(top_n_tvshows, n = 5) 
+
+# Display top N movies as a table
+knitr::kable(top_n_tvshows[, c("title", "listed_in", "duration")],
+      col.names = c( "Title","Genre", "Duration"))
+```
+
+## Conclusion and further research
+
+In this project, we investigated a subset of possible analysis and visualizations for this dataset, concentrating especially on the distribution of movies and TV series among nations. However, there are countless more options for further investigation and study.
+
+One area for future research could be the extraction and analysis of genres from the dataset. By categorizing movies and TV series based on genre, we may learn about audience preferences, trends over time, and how genre popularity varies across nations. Analyzing genre data in relation to criteria such as release year, production type (movies or series), and even audience ratings could reveal important insights into the entertainment industry's dynamics.
+
+Furthermore, we might investigate the dataset's temporal characteristics by evaluating trend lines over time. This could include studying how the number of movies and TV episodes released each year has varied over time, finding trends in genre popularity across different time periods, and looking for any links between release dates and things like viewer ratings or box office results.
+
+We might also look deeper into the behavior of different sorts of content (movies vs. series) and how it relates to measures like viewer engagement, audience demographics, and streaming platform preferences. Understanding how audience preferences differ between movies and television shows could help streaming platforms and production businesses improve their content creation and marketing tactics.
+
+Overall, there are numerous potential directions for future analysis and exploration of this dataset, ranging from genre-based analyses to temporal trends and audience behavior. By leveraging advanced analytical techniques and visualization methods, we can uncover valuable insights into the dynamics of the entertainment industry and audience preferences.
+
+## Books
+
+One of the popular books and well-written ones is [@Frey+2021]. The content is about *algorithmic recommender systems*, deployed by media companies to suggest content based on users’ viewing histories, have inspired hopes for personalized, curated media but also dire warnings of filter bubbles and media homogeneity. All these facts were introduced in @sec-intro.
+
+## Articles
+
+-   For more information about Netflix recommendations and recommender systems read [@inproceedings].
+
+-   Additional paper [@inbook]

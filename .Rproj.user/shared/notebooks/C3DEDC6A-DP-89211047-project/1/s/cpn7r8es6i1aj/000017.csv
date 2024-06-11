@@ -1,0 +1,8 @@
+"0",""
+"0",""
+"0","df <- read.csv(""./files/netflix_titles.csv"")"
+"0","columns_to_delete <- grep(""^X"", names(df))"
+"0","# Reason for deleting columns is that it makes additional columns after reading files. "
+"0","# Columns are called X, X.1, X.2 and so on."
+"0","df <- df[, -columns_to_delete]"
+"0","as_tibble(df)"
